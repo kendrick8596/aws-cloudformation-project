@@ -1,0 +1,567 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudFormation template for Solutions Architect Capstone Project
+
+Resources:
+  DallasVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: DallasVPC
+        - Key: Environment
+          Value: Development
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DallasVPC
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DallasVPC
+      CidrBlock: 10.0.2.0/24
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select [1, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: PublicSubnet2
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DallasVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DallasVPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs "us-east-1"]
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet2
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DallasIGW
+
+  AttachIGW:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref DallasVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NatGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: DallasNatGatewayEIP
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: DallasNatGateway
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: DallasNatGateway2EIP
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: DallasNatGateway2
+
+  RouteTablePublic:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DallasVPC
+      Tags:
+        - Key: Name
+          Value: PublicRouteTable
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePublic
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTablePublic
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTablePublic
+
+  RouteTablePrivate1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DallasVPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable1
+
+  RouteTablePrivate2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DallasVPC
+      Tags:
+        - Key: Name
+          Value: PrivateRouteTable2
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate1
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTablePrivate2
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref RouteTablePrivate1
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref RouteTablePrivate2
+
+  SSMInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SSMPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "ssm:*"
+                  - "ec2messages:*"
+                  - "cloudwatch:*"
+                  - "logs:*"
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  SSMInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref SSMInstanceRole
+
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH access from home IP
+      VpcId: !Ref DallasVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: <YOUR PUBLIC IP ADDRESS> # Replace with your public IP address
+      Tags:
+        - Key: Name
+          Value: BastionSecurityGroup
+        - Key: Environment
+          Value: Development
+
+  PrivateInstanceSSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH access from Bastion host
+      VpcId: !Ref DallasVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Sub "${BastionInstance.PrivateIp}/32"
+      Tags:
+        - Key: Name
+          Value: PrivateInstanceSSHSecurityGroup
+        - Key: Environment
+          Value: Development
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow MySQL access from Application host
+      VpcId: !Ref DallasVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppInstanceSecurityGroup
+      Tags:
+        - Key: Name
+          Value: DatabaseSecurityGroup
+        - Key: Environment
+          Value: Development
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP access from the internet
+      VpcId: !Ref DallasVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: ALBSecurityGroup
+        - Key: Environment
+          Value: Development
+
+  AppInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP access from the internet
+      VpcId: !Ref DallasVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: AppInstanceSecurityGroup
+        - Key: Environment
+          Value: Development
+
+  AppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: AppLoadBalancer
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Tags:
+        - Key: Name
+          Value: AppLoadBalancer
+        - Key: Environment
+          Value: Development
+
+  AppLoadBalancerListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref AppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 200
+            ContentType: text/plain
+            MessageBody: "Hello, World!"
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref DallasVPC
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Tags:
+        - Key: Name
+          Value: AppTargetGroup
+        - Key: Environment
+          Value: Development
+
+  BastionInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
+      KeyName: <YOUR KEYNAME>
+      SubnetId: !Ref PublicSubnet1
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          systemctl start httpd
+          systemctl enable httpd
+          PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo "Hello from the Bastion host!" > /var/www/html/index.html
+          echo "Bastion host IP: $PRIVATE_IP" >> /var/www/html/index.html
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      Tags:
+        - Key: Name
+          Value: BastionInstance
+        - Key: Environment
+          Value: Development
+
+  AppInstancePrimary:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
+      KeyName: <YOUR KEYNAME>
+      SubnetId: !Ref PrivateSubnet1
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          yum install -y postgresql15
+          systemctl start httpd
+          systemctl enable httpd
+          PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo "Hello from the App instance!" > /var/www/html/index.html
+          echo "App instance IP: $PRIVATE_IP" >> /var/www/html/index.html
+      SecurityGroupIds:
+        - !Ref AppInstanceSecurityGroup
+        - !Ref PrivateInstanceSSHSecurityGroup
+      Tags:
+        - Key: Name
+          Value: AppInstancePrimary
+        - Key: Environment
+          Value: Development
+
+  AppInstanceSecondary:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
+      KeyName: <YOUR KEYNAME>
+      SubnetId: !Ref PrivateSubnet2
+      IamInstanceProfile: !Ref SSMInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          yum install -y httpd
+          yum install -y postgresql15
+          systemctl start httpd
+          systemctl enable httpd
+          PRIVATE_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+          echo "Hello from the App instance!" > /var/www/html/index.html
+          echo "App instance IP: $PRIVATE_IP" >> /var/www/html/index.html
+      SecurityGroupIds:
+        - !Ref AppInstanceSecurityGroup
+        - !Ref PrivateInstanceSSHSecurityGroup
+      Tags:
+        - Key: Name
+          Value: AppInstanceSecondary
+        - Key: Environment
+          Value: Development
+
+  BastionEBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !GetAtt BastionInstance.AvailabilityZone
+      Size: 10 # Size in GB
+      VolumeType: gp2
+      Tags:
+        - Key: Name
+          Value: BastionEBSVolume
+        - Key: Environment
+          Value: Development
+
+  BastionEBSVolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref BastionInstance
+      VolumeId: !Ref BastionEBSVolume
+      Device: /dev/sdf # This is the device name in the instance.
+
+  PublicEBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Select [0, !GetAZs "us-east-1"]
+      Size: 20 # Size in GB
+      VolumeType: gp2
+      Tags:
+        - Key: Name
+          Value: PublicEBSVolume
+        - Key: Environment
+          Value: Development
+
+  PublicEBSVolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref AppInstancePrimary # Attach to the primary app instance
+      VolumeId: !Ref PublicEBSVolume
+      Device: /dev/sdg # This is the device name in the instance. Adjust as needed.
+
+  PrivateEBSVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !Select [1, !GetAZs "us-east-1"]
+      Size: 20 # Size in GB
+      VolumeType: gp2
+      Tags:
+        - Key: Name
+          Value: PrivateEBSVolume
+        - Key: Environment
+          Value: Development
+
+  PrivateEBSVolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref AppInstanceSecondary # Attach to the secondary app instance
+      VolumeId: !Ref PrivateEBSVolume
+      Device: /dev/sdh # This is the device name in the instance. Adjust as needed.
+
+  DallasLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: DallasLaunchTemplate
+      LaunchTemplateData:
+        InstanceType: t2.micro
+        ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
+        KeyName: <YOUR KEYNAME>
+        IamInstanceProfile:
+          Name: !Ref SSMInstanceProfile
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            yum update -y
+            yum install -y httpd
+            yum install -y postgresql15
+            systemctl start httpd
+            systemctl enable httpd
+            echo "Hello from the Launch Template!" > /var/www/html/index.html
+
+  AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      DesiredCapacity: 2
+      MaxSize: 3
+      MinSize: 2
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      # LaunchConfigurationName: !Ref LaunchTemplate
+      LaunchTemplate:
+        LaunchTemplateId: !Ref DallasLaunchTemplate
+        Version: !GetAtt DallasLaunchTemplate.LatestVersionNumber
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 300 # Time in seconds to wait before checking health
+      TargetGroupARNs:
+        - !Ref AppTargetGroup
+      Tags:
+        - Key: Name
+          Value: AutoScalingGroup
+          PropagateAtLaunch: true # This ensures the tag is applied to instances launched by the ASG
+        - Key: Environment
+          Value: Development
+          PropagateAtLaunch: true # This ensures the tag is applied to instances launched by the ASG
+
+  DallasDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      DBSubnetGroupName: DallasDBSubnetGroup
+      Tags:
+        - Key: Name
+          Value: DallasDBSubnetGroup
+        - Key: Environment
+          Value: Development
+
+  DBPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: DBPassword
+      Description: RDS database password
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"<USERNAME>"}' # Replace <USERNAME> with the actual username, e.g., "YOUR_USERNAME"
+        GenerateStringKey: password
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\\'
+        ExcludePunctuation: true
+        ExcludeUppercase: false
+        ExcludeLowercase: false
+        ExcludeNumbers: false
+        RequireEachIncludedType: true
+        IncludeSpace: false
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: MyDatabaseInstance
+      DBInstanceClass: db.t3.micro
+      Engine: postgres # Change to your desired database engine
+      EngineVersion: 15 # Change to your desired engine version
+      MasterUsername: <YOUR MASTER USERNAME> # Replace with your actual master username
+      MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBPassword}:SecretString:password}}"
+      AllocatedStorage: 20
+      DBSubnetGroupName: !Ref DallasDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
