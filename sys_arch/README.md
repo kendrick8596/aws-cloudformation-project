@@ -44,7 +44,9 @@ Setup Instructions
 Prepare the CloudFormation Template:
 
 Add you public IP address to the Bastion hosts security group
+
 Add your key's to the KeyName: section in the AppInstance creation (public and private) for ssh connectivity
+
 Add your own username for the database in the DBPassword resource
 
 Save the CloudFormation template to a .yaml or .json file.
