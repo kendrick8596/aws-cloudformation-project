@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: CloudFormation template for Solutions Architect Capstone Project
+Description: CloudFormation template for a VPC with public and private subnets, NAT gateways, security groups, application load balancer, RDS Postgres database, and EC2 instances with attached EBS volumes.
 
 Resources:
   DallasVPC:
