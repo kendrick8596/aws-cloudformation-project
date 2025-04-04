@@ -212,7 +212,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: <YOUR PUBLIC IP ADDRESS> # Replace with your public IP address
+          CidrIp: 70.122.208.254/32 # Replace with your public IP address
       Tags:
         - Key: Name
           Value: BastionSecurityGroup
@@ -338,12 +338,19 @@ Resources:
         - Key: Environment
           Value: Development
 
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+         KeyName: SysArch
+         KeyType: rsa
+         KeyFormat: pem
+
   BastionInstance:
     Type: AWS::EC2::Instance
     Properties:
       InstanceType: t2.micro
       ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
-      KeyName: <YOUR KEYNAME>
+      KeyName: !Ref EC2KeyPair
       SubnetId: !Ref PublicSubnet1
       UserData:
         Fn::Base64: !Sub |
@@ -368,7 +375,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
-      KeyName: <YOUR KEYNAME>
+      KeyName: !Ref EC2KeyPair
       SubnetId: !Ref PrivateSubnet1
       IamInstanceProfile: !Ref SSMInstanceProfile
       UserData:
@@ -396,7 +403,7 @@ Resources:
     Properties:
       InstanceType: t2.micro
       ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
-      KeyName: <YOUR KEYNAME>
+      KeyName: !Ref EC2KeyPair
       SubnetId: !Ref PrivateSubnet2
       IamInstanceProfile: !Ref SSMInstanceProfile
       UserData:
@@ -483,7 +490,7 @@ Resources:
       LaunchTemplateData:
         InstanceType: t2.micro
         ImageId: ami-08b5b3a93ed654d19 # Amazon Linux 2 AMI
-        KeyName: <YOUR KEYNAME>
+        KeyName: !Ref EC2KeyPair
         IamInstanceProfile:
           Name: !Ref SSMInstanceProfile
         UserData:
@@ -541,7 +548,7 @@ Resources:
       Name: DBPassword
       Description: RDS database password
       GenerateSecretString:
-        SecretStringTemplate: '{"username":"<USERNAME>"}' # Replace <USERNAME> with the actual username, e.g., "YOUR_USERNAME"
+        SecretStringTemplate: '{"username":"khump"}' # Replace <USERNAME> with the actual username, e.g., "YOUR_USERNAME"
         GenerateStringKey: password
         PasswordLength: 16
         ExcludeCharacters: '"@/\\'
@@ -559,7 +566,7 @@ Resources:
       DBInstanceClass: db.t3.micro
       Engine: postgres # Change to your desired database engine
       EngineVersion: 15 # Change to your desired engine version
-      MasterUsername: <YOUR MASTER USERNAME> # Replace with your actual master username
+      MasterUsername: khump # Replace with your actual master username
       MasterUserPassword: !Sub "{{resolve:secretsmanager:${DBPassword}:SecretString:password}}"
       AllocatedStorage: 20
       DBSubnetGroupName: !Ref DallasDBSubnetGroup
